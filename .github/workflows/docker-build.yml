@@ -5,6 +5,13 @@ on:
     branches:
       - main
 
+env:
+  VERSION: 0.1.0
+  CONTAINER_REGISTRY: ${{ secrets.AZURE_CONTAINER_REGISTRY }}
+  REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
+  REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
+  KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -25,16 +32,20 @@ jobs:
       - name: Log in to Azure Container Registry
         uses: azure/docker-login@v1
         with:
-          login-server: ${{ secrets.AZURE_CONTAINER_REGISTRY }}
-          username: ${{ secrets.REGISTRY_USERNAME }}
-          password: ${{ secrets.REGISTRY_PASSWORD }}
+          login-server: ${{ env.CONTAINER_REGISTRY }}
+          username: ${{ env.REGISTRY_USERNAME }}
+          password: ${{ env.REGISTRY_PASSWORD }}
 
       - name: Build and Push Docker image
         run: |
-          docker build -t ${{ secrets.AZURE_CONTAINER_REGISTRY }}/arithmetic-service:latest .
-          docker push ${{ secrets.AZURE_CONTAINER_REGISTRY }}/arithmetic-service:latest
+          docker build -t ${{ env.CONTAINER_REGISTRY }}/arithmetic-service:${{ env.VERSION }} .
+          docker push ${{ env.CONTAINER_REGISTRY }}/arithmetic-service:${{ env.VERSION }}
 
-      - name: Deploy to Kubernetes
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v3
+
+      - name: Deploy to AKS
         run: |
-          echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > kubeconfig.yaml
-          kubectl --kubeconfig=kubeconfig.yaml apply -f deploy.yaml
+          echo "${{ env.KUBE_CONFIG }}" | base64 -d > kubeconfig.yaml
+          chmod 600 kubeconfig.yaml
+          ./deploy.sh
