@@ -1,0 +1,40 @@
+name: Build and Deploy Arithmetic Service
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Set up Java
+        uses: actions/setup-java@v2
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Build .jar using Maven
+        run: ./mvnw clean package -DskipTests
+
+      - name: Log in to Azure Container Registry
+        uses: azure/docker-login@v1
+        with:
+          login-server: ${{ secrets.AZURE_CONTAINER_REGISTRY }}
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
+
+      - name: Build and Push Docker image
+        run: |
+          docker build -t ${{ secrets.AZURE_CONTAINER_REGISTRY }}/arithmetic-service:latest .
+          docker push ${{ secrets.AZURE_CONTAINER_REGISTRY }}/arithmetic-service:latest
+
+      - name: Deploy to Kubernetes
+        run: |
+          echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > kubeconfig.yaml
+          kubectl --kubeconfig=kubeconfig.yaml apply -f deploy.yaml
